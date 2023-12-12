@@ -28,3 +28,9 @@ MANIFEST
 
 # Environments
 rag_env/
+
+# Config files
+config.yaml
+
+# Model
+biencoder-MiniLM-L6-all-v2-mmarcoFR/
