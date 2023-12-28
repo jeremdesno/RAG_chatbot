@@ -29,7 +29,7 @@ MANIFEST
 # Environments
 rag_env/
 
-# Config files
+# Config file
 config.yaml
 
 # Model
