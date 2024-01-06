@@ -8,7 +8,8 @@ import os
 from requests.exceptions import HTTPError
 from datetime import datetime 
 import uuid
-from typing import List
+from typing import List, Dict, Tuple
+from huggingface_hub import InferenceClient
 
 
 QA_GENERATE_PROMPT_TMPL = """\
@@ -73,15 +74,13 @@ class QADatasetManager:
                     json.dump(metadata, json_file)
                     print('Initialised metadata file')
                     json_file.close()
-
     @staticmethod
-    def encode_chunk_idx(chunk_num, idx):
+    def encode_chunk_idx(chunk_num : int, idx : int) -> str:
         # Encode chunk_num and idx into a dictionary and then base64 encode it
         encoded_id = base64.b64encode(f"chunk_{chunk_num}_index_{idx}".encode()).decode()
         return encoded_id
-
     @staticmethod
-    def decode_chunk_idx(encoded_id):
+    def decode_chunk_idx(encoded_id : str) -> Tuple[str, str]:
         # Decode the base64 string and extract chunk_num and idx
         decoded_id = base64.b64decode(encoded_id).decode()
         parts = decoded_id.split('_')
@@ -89,7 +88,7 @@ class QADatasetManager:
         idx = int(parts[3])
         return idx, chunk_num
 
-    def get_qa_dataset(self):
+    def get_qa_dataset(self) -> Dict[str, Dict[str, str]]:
         with open(self.qa_path, 'r') as json_file:
             qa_dataset = json.load(json_file)
             json_file.close()
@@ -97,7 +96,7 @@ class QADatasetManager:
     
     def parse_documents(self, 
                         texts: List[str],
-                        chunk_size=1024):
+                        chunk_size : int = 1024 ) -> Dict[str,str]:
         node_dict = {}
         for idx, text in enumerate(texts):
             num_chunks = (len(text) + chunk_size - 1) // chunk_size
@@ -105,20 +104,20 @@ class QADatasetManager:
                 start_idx = chunk_num * chunk_size
                 end_idx = min((chunk_num + 1) * chunk_size, len(text))
                 chunk_text = text[start_idx:end_idx]
-
                 node_id = self.encode_chunk_idx(chunk_num, idx)
                 node_dict[node_id] = chunk_text
+        print(f"The documents have been divided into {len(node_dict)} chunks")
         return node_dict
             
 
     def create_qa_pairs(self, 
                         texts: List[str], 
-                        client,
-                        model, 
-                        qa_generate_prompt_tmpl=QA_GENERATE_PROMPT_TMPL,
-                        max_new_tokens=100, 
-                        num_questions_per_chunk=2, 
-                        chunk_size=1024):
+                        client : InferenceClient,
+                        model : str, 
+                        qa_generate_prompt_tmpl : str=QA_GENERATE_PROMPT_TMPL,
+                        max_new_tokens : int=100, 
+                        num_questions_per_chunk : int=2, 
+                        chunk_size : int=1024) -> None:
         
         random.seed(12345)
         indexes = list(range(len(texts)))
@@ -216,7 +215,7 @@ class QADatasetManager:
                 relevant_docs = {}
                 time.sleep(30)
 
-    def add_qa_to_dataset(self):
+    def add_qa_to_dataset(self) -> None:
         # Load intermediate file if not loaded
         if self.qa_intermed is None:
             with open(self.temp_path, 'r') as temp_file:
@@ -255,11 +254,11 @@ class QADatasetManager:
                 qa_file.close()
     
     def create_answers(self, 
-                       qa_dataset,
-                       client,
-                       model, 
-                       max_new_tokens=500, 
-                       prompt = GENERATION_PROMPT):
+                       qa_dataset : Dict[str, Dict[str, str]],
+                       client : InferenceClient,
+                       model : str, 
+                       max_new_tokens : int=500, 
+                       prompt : str=GENERATION_PROMPT) -> None:
         
         # Loading already answered questions
         if 'answers' in qa_dataset.keys():
@@ -312,7 +311,7 @@ class QADatasetManager:
                     else:
                         print("Maximum retries reached. Skipping this query.")   
 
-            if (iter +1) % 5 == 0:
+            if (iter +1) % 5 == 0 or iter +1 == len(ids):
                 print(f"Updating answers dict")
                 self.answers_intermed.update(answers)
 
@@ -324,7 +323,7 @@ class QADatasetManager:
 
                 time.sleep(30)
 
-    def add_answers_to_dataset(self):
+    def add_answers_to_dataset(self) -> None:
         # Load intermediate file if not loaded
         if self.answers_intermed is None:
             with open(self.temp_ans_path, 'r') as temp_ans_file:
