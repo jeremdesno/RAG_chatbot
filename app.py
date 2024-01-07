@@ -23,7 +23,7 @@ if prompt := st.chat_input("Ask a question about our database:"):
         message_placeholder.markdown("Let me look that up for you...▌")
         
         # Use our answer module to get the answer
-        context = get_context_for_query(prompt)
+        context = get_context_for_query(prompt,use_reranking=False)
         if context:
             answer = generate_answer_from_context(context, prompt, inference_client, model)
         else:

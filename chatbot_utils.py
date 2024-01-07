@@ -48,19 +48,18 @@ def query_search(index, model, query, k=10):
     query_vector = model.encode([query]).astype(np.float32)
     faiss.normalize_L2(query_vector)
     D, I = index.search(query_vector, k)
-    return D, I
+    search_results = [(idx, D[0][i], df.iloc[idx]['content']) for i, idx in enumerate(I[0])]
+    return search_results
 
 def rerank_and_sort(search_results, reranker, query):
-    D, I = search_results
     reranked_results = []
-    for i, idx in enumerate(I[0]):
-        doc = df.iloc[idx]['content']
-        reranked_results.append((idx, D[0][i], doc))
+    for idx, original_score, text in search_results:
+        reranked_results.append((idx, original_score, text))
     
-    # Here, we will compute the rerank scores for each document-query pair
+    # Compute the rerank scores for each document-query pair
     rerank_scores = reranker.compute_score([[text, query] for _, _, text in reranked_results])
 
-    # Now, we combine the original scores with the rerank scores
+    # Combine the original scores with the rerank scores
     reranked_results_with_scores = [
         (idx, original_score, rerank_score, text)
         for (idx, original_score, text), rerank_score in zip(reranked_results, rerank_scores)
@@ -71,25 +70,28 @@ def rerank_and_sort(search_results, reranker, query):
     return reranked_results_with_scores
 
 
-def get_response(reranked_results, top_k=5):
+def get_response(reranked_results, use_reranking=True, top_k=5):
     responses = []
-    for i in range(top_k):
-        idx, score, rerank_score, text = reranked_results[i]
+    for i in range(min(top_k, len(reranked_results))):
+        idx, similarity_score, rerank_score, text = reranked_results[i]
+
         response = {
             'id': idx,
             'text': text,
-            'similarity_score': score,
-            'rerank_score': rerank_score
+            'similarity_score': similarity_score,
+            'rerank_score': rerank_score if use_reranking else similarity_score  # Use similarity score if rerank score is None
         }
         responses.append(response)
     return responses
 
+
 # Use these functions in your Streamlit app or any other application
+"""
 query = "What are codespaces?"
 search_results = query_search(indexIVFFlat, model_L6_v2, query)
 reranked_results = rerank_and_sort(search_results, reranker, query)
 responses = get_response(reranked_results)
-
+"""
 # The responses can now be formatted and displayed as needed
 """for response in responses:
     print(f"Document ID: {response['id']}")
@@ -97,19 +99,25 @@ responses = get_response(reranked_results)
     print(f"Similarity Score: {response['similarity_score']}")
     print(f"Rerank Score: {response['rerank_score']}\n")"""
 
-def get_context_for_query(query):
+def get_context_for_query(query, use_reranking=True):
     search_results = query_search(indexIVFFlat, model_L6_v2, query)
-    reranked_results = rerank_and_sort(search_results, reranker, query)
-    responses = get_response(reranked_results)
+    
+    if use_reranking:
+        reranked_results = rerank_and_sort(search_results, reranker, query)
+    else:
+        reranked_results = [(idx, score, None, text) for idx, score, text in search_results]
+
+    responses = get_response(reranked_results, use_reranking)
 
     if responses:
-        # Sort the responses by rerank score to get the highest scoring document
-        top_response = sorted(responses, key=lambda x: x['rerank_score'], reverse=True)[0]
+        top_response = sorted(responses, key=lambda x: x['rerank_score' if use_reranking else 'similarity_score'], reverse=True)[0]
         context = top_response['text']
         return context
     else:
         print("No responses found for the query.")
         return None
+
+
 
 def generate_answer_from_context(context, query, client, model, max_new_tokens=500, prompt_template=GENERATION_PROMPT):
     retries = 3
@@ -148,9 +156,12 @@ def generate_answer_from_context(context, query, client, model, max_new_tokens=5
 
 # Example usage:
 # Assuming you have a function to get context for a given query
+"""
 context = get_context_for_query(query)
 answer = generate_answer_from_context(context, query, inference_client, model)
 if answer:
     print(f"Answer: {answer}")
 else:
     print("Failed to generate an answer.")
+
+"""
