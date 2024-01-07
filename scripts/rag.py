@@ -30,14 +30,8 @@ Answer:
 class rag_manager():
     def __init__(self, 
                  nodes : dict[str,str], 
-                 client : InferenceClient, 
-                 llm_model : str,
-                 index : str=None, 
-                 prompt : str = GENERATION_PROMPT) -> None:
-        self.index = index
+                 client : InferenceClient) -> None:
         self.client = client
-        self.llm_model = llm_model
-        self.prompt = prompt
         self.texts = np.array(list(nodes.values()))
         self.ids = np.array(list(nodes.keys()))
 
@@ -119,22 +113,25 @@ class rag_manager():
     def generate_answer(self,
                         queries :  List[str],
                         contexts : List[str],
-                        max_new_tokens : int=500) -> List[str]:
+                        llm_model : str,
+                        max_new_tokens : int=500,
+                        prompt : str = GENERATION_PROMPT) -> List[str]:
         
         answers = []
         for idx, query in enumerate(queries):
             print(f"Answering query: {query}")
-            query_prompt = self.prompt.format(context_str=' Next Context: '.join(contexts[idx]), query= query)
+            query_prompt = prompt.format(context_str=' Next Context: '.join(contexts[idx]), query= query)
             retries = 3
             for attempt in range(retries):
                 try:
-                    answer = self.client.text_generation(prompt=query_prompt, model=self.llm_model, max_new_tokens=max_new_tokens)
+                    answer = self.client.text_generation(prompt=query_prompt, model=llm_model, max_new_tokens=max_new_tokens)
                     answer_parsed = re.sub(r"^(-{1,})","",re.sub(r"^\s*\d+\.\s*|\n", " ",answer))
                     answer_parsed = answer_parsed.strip()
+                    print("answer: ", answer_parsed)
                     if answer_parsed:
                         answers.append(answer_parsed)
                     else:
-                        answer.append('Could not answer this query.')
+                        answers.append('Could not answer this query.')
                     break
                 
                 except HTTPError as e:
@@ -164,11 +161,12 @@ class rag_manager():
                                        queries : List[str],
                                        index : faiss.Index,
                                        embedding_model : SentenceTransformer, 
+                                       llm_model : str,
                                        k : int = 5
                                        ) -> Tuple[List[str], List[str], List[str]]:
         
-        contexts, contexts_ids, _ = self.retrieve_context(index=index, embedding_model=embedding_model, queries=queries)
-        answers= self.generate_answer(queries=queries, contexts=contexts)
+        contexts, contexts_ids, _ = self.retrieve_context(index=index, embedding_model=embedding_model, queries=queries, k=k)
+        answers= self.generate_answer(queries=queries, contexts=contexts, llm_model=llm_model)
         return answers, contexts, contexts_ids
     
     def calculate_cross_encoder_similarity(self,
