@@ -6,7 +6,7 @@ from sentence_transformers import CrossEncoder
 from FlagEmbedding import FlagReranker
 
 import faiss
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Optional
 
 import time
 from requests.exceptions import HTTPError
@@ -88,23 +88,39 @@ class rag_manager():
         return search_results, search_time
 
     def reranking(self,
-                  query : str, 
-                  results: Dict[str, str], 
-                  reranker : str = 'BAAI/bge-reranker-base', 
-                  k_final : str = 3) -> Dict[str, str]:
-        reranker = FlagReranker(reranker, use_fp16=True) 
-        pairs = [[result['text'], query] for result in results]
-        scores = reranker.compute_score(pairs)
-        for i, score in enumerate(scores):
-            results[i]['rerank_score'] = score
-        return sorted(results, key=lambda x: x['rerank_score'], reverse=True)[:k_final]
+                  queries : List[str], 
+                  search_results: Dict[str, str], 
+                  reranker : FlagReranker, 
+                  k_final : str = 3) -> Tuple[Dict[str, int | float], float]:
+        
+
+        t=time.time()
+        contexts = self.texts[search_results['indexes']]
+        reranked_scores = []
+        indexes = []
+        for idx,query in enumerate(queries):
+            pairs = [(context, query) for context in contexts[idx]]
+            scores = reranker.compute_score(pairs)
+            top_k_indices = np.argsort(scores)[::-1][:k_final]
+            reranked_scores.append(np.array(scores)[top_k_indices].tolist())
+            indexes.append(np.array(search_results['indexes'][idx])[top_k_indices].tolist())
+        final_scores = {'indexes': indexes, 
+                        'scores': reranked_scores}
+        
+        reranking_time = round(time.time()-t,2)
+        return final_scores, reranking_time
     
     def retrieve_context(self, 
                          index : faiss.Index, 
                          embedding_model : SentenceTransformer, 
                          queries : List[str], 
-                         k : int=5) -> Tuple[List[str], List[str], float]:
+                         reranker : Optional[FlagReranker]=None,
+                         k : int=5,
+                         k_after_rerank : Optional[int]=3) -> Tuple[List[str], List[str], float]:
         search_results, search_time = self.search(index=index, model=embedding_model, queries=queries, k=k)
+        if reranker is not None:
+            search_results, reranking_time = self.reranking(queries,search_results,reranker,k_after_rerank)
+            search_time += reranking_time
         contexts = self.texts[search_results['indexes']]
         contexts_ids = self.ids[search_results['indexes']]
 
@@ -119,7 +135,7 @@ class rag_manager():
         
         answers = []
         for idx, query in enumerate(queries):
-            print(f"Answering query: {query}")
+            #print(f"Answering query: {query}")
             query_prompt = prompt.format(context_str=' Next Context: '.join(contexts[idx]), query= query)
             retries = 3
             for attempt in range(retries):
@@ -127,7 +143,7 @@ class rag_manager():
                     answer = self.client.text_generation(prompt=query_prompt, model=llm_model, max_new_tokens=max_new_tokens)
                     answer_parsed = re.sub(r"^(-{1,})","",re.sub(r"^\s*\d+\.\s*|\n", " ",answer))
                     answer_parsed = answer_parsed.strip()
-                    print("answer: ", answer_parsed)
+                    #print("answer: ", answer_parsed)
                     if answer_parsed:
                         answers.append(answer_parsed)
                     else:

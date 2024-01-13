@@ -50,13 +50,16 @@ Answer:
 
 class QADatasetManager:
     def __init__(self):
-        self.temp_path = '../data/qa_dataset_intermed.json'
-        self.qa_path = '../data/qa_dataset.json'  
-        self.metadata_path = '../data/metadata.json'
-        self.temp_ans_path = '../data/answers_intermed.json'
-        self.qa_intermed = None
-        self.answers_intermed = None
-        files = os.listdir('../data')
+        # Get the directory of the current script
+        root_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+        # Use this directory to construct other paths
+        self.temp_path = os.path.join(root_dir, 'data', 'qa_dataset_intermed.json')
+        self.qa_path = os.path.join(root_dir, 'data', 'qa_dataset.json')
+        self.metadata_path = os.path.join(root_dir, 'data', 'metadata.json')
+        self.temp_ans_path = os.path.join(root_dir, 'data', 'answers_intermed.json')
+
+        files = os.listdir(os.path.join(root_dir, 'data'))
+
         if 'metadata.json' in files:
             try :
                 with open(self.metadata_path, 'r') as json_file:
@@ -108,6 +111,24 @@ class QADatasetManager:
                 node_dict[node_id] = chunk_text
         print(f"The documents have been divided into {len(node_dict)} chunks")
         return node_dict
+    
+    def save_nodes(self,
+                   nodes : Dict[str,str], 
+                   saving_path : str) -> None:
+        with open(saving_path, 'w') as file:
+            json.dump(nodes, file)
+            print(f"saved nodes to --> {saving_path} ")
+            file.close()
+
+    def load_nodes(self,
+                   loading_path : str, 
+                   verbose : bool=True) ->  Dict[str,str]:
+        with open(loading_path, 'r') as nodes_file:
+                    nodes = json.load(nodes_file)
+                    nodes_file.close()
+        if verbose == True:
+            print(f"Successfuly loaded nodes from {loading_path}")
+        return nodes
             
 
     def create_qa_pairs(self, 
