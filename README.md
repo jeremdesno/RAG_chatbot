@@ -8,15 +8,22 @@ We've also built a simple web interface using streamlit which offers the functio
 
 ## How to install and launch the streamlit app?
 ### Creating virtual environnement
+```
 python -m venv env_name
+```
 (python version used 3.10.11)
-### Activating the virtual environnement 
+### Activating the virtual environnement
+```
 env_name\Scripts\activate
+```
 ### Installing the requirements
+```
 pip install -r requirements.txt
+```
 ### Launching streamlit app
+```
 streamlit run app.py
-
+```
 NB: For the app to work you need to add to the root folder a config.yml file that contains your HuggingFace token in the following format: 
 ```
 huggingface:
