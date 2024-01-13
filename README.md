@@ -18,8 +18,10 @@ pip install -r requirements.txt
 streamlit run app.py
 
 NB: For the app to work you need to add to the root folder a config.yml file that contains your HuggingFace token in the following format: 
+```
 huggingface:
   token_api: "key"
+```
 You can go to this link https://huggingface.co/ to create an account and get a token key.
 
 ## How to navigate this repo ?
