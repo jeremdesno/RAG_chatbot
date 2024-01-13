@@ -28,6 +28,7 @@ MANIFEST
 
 # Environments
 rag_env/
+rag_venv/
 
 # Config file
 config.yaml

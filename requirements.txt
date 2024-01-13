@@ -17,6 +17,7 @@ ragas==0.0.22
 scikit-learn==1.0.2
 sentence_transformers==2.2.2
 SQLAlchemy==2.0.23
+streamlit==1.30.0
 tokenizers==0.13.3
 torch==2.0.1
 tqdm==4.65.0
